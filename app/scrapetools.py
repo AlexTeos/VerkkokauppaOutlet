@@ -23,8 +23,8 @@ class ScrapeTools:
         price = math.ceil(float(price))
         return price
 
-    def get_caption(self):
-        pass
+    def get_caption(self, soup):
+        return soup.find('h1', {'class': True}).string
 
     def get_item_data(self, id):
         self.driver.get(f'https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{id}')
@@ -34,9 +34,10 @@ class ScrapeTools:
         current_price = None
         percent = None
         full_price = None
+        caption = None
         sold = soup.find_all('div', string='Tämä tuote ei ole enää saatavilla.')
         if sold:
-            return sold, None, None, None
+            return sold, None, None, None, None
         else:
             current_price = self.get_price(soup, 'current')
 
@@ -45,4 +46,6 @@ class ScrapeTools:
 
             full_price = self.get_price(soup, 'previous')
 
-        return sold, current_price, percent, full_price
+            caption = self.get_caption(soup)
+
+        return sold, current_price, percent, full_price, caption

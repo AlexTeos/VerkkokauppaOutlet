@@ -33,20 +33,20 @@ class TelegramTools:
         sold = None
         price = None
         try:
-            sold, price, _, _ = self.st.get_item_data(item_id)
+            sold, price, _, _, caption = self.st.get_item_data(item_id)
         except ParsingError:
             await context.bot.send_message(chat_id=self.admin_id, text='Failed to add item! Please try again!')
 
         if not sold:
-            self.db.insert_item(update.message.from_user.id, update.message.text, str(item_id), price)
-            await update.message.reply_text(f'{update.message.text}! Got it!')
+            self.db.insert_item(update.message.from_user.id, update.message.text, caption, price)
+            await update.message.reply_text(f'Added "{caption}" to your watch list!\nThe currect price is {price}€')
         else:
             await update.message.reply_text('Item is sold!')
 
     async def callback_minute(self, context: ContextTypes.DEFAULT_TYPE):
         for item_id, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset=10):
             try:
-                sold, current_price, percent, full_price = self.st.get_item_data(item_id)
+                sold, current_price, percent, full_price, _ = self.st.get_item_data(item_id)
             except ParsingError:
                 continue
             if sold:
