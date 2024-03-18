@@ -13,7 +13,7 @@ class ScrapeTools:
         self.logger = logger
         self.driver = webdriver.Chrome()
 
-    def get_price(self, soup, tag):
+    def _get_price(self, soup, tag):
         prices = soup.find_all('data', {'data-price': tag})
         try:
             price = prices[-1]['value']
@@ -23,8 +23,17 @@ class ScrapeTools:
         price = math.ceil(float(price))
         return price
 
-    def get_caption(self, soup):
+    def _get_caption(self, soup):
         return soup.find('h1', {'class': True}).string
+
+    def _get_percent(self, soup):
+        percents = soup.find_all('span', {'data-discount-percentage': True})
+        try:
+            percent = percents[0]['data-discount-percentage']
+        except IndexError:
+            self.logger.error('Failed to extract percent')
+            raise ParsingError('Failed to extract percent')
+        return percent
 
     def get_item_data(self, id):
         self.driver.get(f'https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{id}')
@@ -39,13 +48,9 @@ class ScrapeTools:
         if sold:
             return sold, None, None, None, None
         else:
-            current_price = self.get_price(soup, 'current')
-
-            percents = soup.find_all('span', {'data-discount-percentage': True})
-            percent = percents[0]['data-discount-percentage']
-
-            full_price = self.get_price(soup, 'previous')
-
-            caption = self.get_caption(soup)
+            current_price = self._get_price(soup, 'current')
+            full_price = self._get_price(soup, 'previous')
+            percent = self._get_percent(soup)
+            caption = self._get_caption(soup)
 
         return sold, current_price, percent, full_price, caption

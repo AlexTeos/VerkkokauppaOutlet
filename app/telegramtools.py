@@ -39,14 +39,18 @@ class TelegramTools:
 
         if not sold:
             self.db.insert_item(update.message.from_user.id, update.message.text, caption, price)
-            await update.message.reply_text(f'Added "{caption}" to your watch list!\nThe currect price is {price}€')
+            message = (
+                f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
+                f' was added to your watch list!\nThe current price is {price}€'
+            )
+            await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text('Item is sold!')
 
     async def callback_minute(self, context: ContextTypes.DEFAULT_TYPE):
         for item_id, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset=10):
             try:
-                sold, current_price, percent, full_price, _ = self.st.get_item_data(item_id)
+                sold, current_price, percent, full_price, caption = self.st.get_item_data(item_id)
             except ParsingError:
                 continue
             if sold:
@@ -57,8 +61,14 @@ class TelegramTools:
                 if current_price != last_price:
                     self.db.insert_event(item_id, percent, current_price, full_price)
                     for _, user_id in self.db.get_users_per_item(item_id):
-                        await context.bot.send_message(chat_id=user_id, text=f'Item\'s {item_id} price changed! '
-                                                                             f'{last_price} -> {current_price}')
+                        message = (
+                            f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
+                            f' price changed!\n'
+                            f'Before: {last_price}€\n'
+                            f'After: {current_price}€\n'
+                            f'Sale: {percent}%'
+                        )
+                        await context.bot.send_message(chat_id=user_id, text=message, parse_mode=ParseMode.HTML)
                 else:
                     self.db.item_checked(item_id)
 
@@ -70,12 +80,12 @@ class TelegramTools:
 
         update_str = update.to_dict() if isinstance(update, Update) else str(update)
         message = (
-            f"An exception was raised while handling an update\n"
-            f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
-            "</pre>\n\n"
-            f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
-            f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
-            f"<pre>{html.escape(tb_string)}</pre>"
+            f'An exception was raised while handling an update\n'
+            f'<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}'
+            '</pre>\n\n'
+            f'<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n'
+            f'<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n'
+            f'<pre>{html.escape(tb_string)}</pre>'
         )
 
         await context.bot.send_message(
