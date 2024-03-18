@@ -1,8 +1,10 @@
 import sqlite3
 from pathlib import Path
 
+
 class DB:
-    def __init__(self):
+    def __init__(self, logger):
+        self.logger = logger
         db_file = Path('vk.sqlite')
         db_exist = db_file.exists()
         self.connection = sqlite3.connect('vk.sqlite')
@@ -26,9 +28,8 @@ class DB:
                             ')')
 
         self.cursor.execute('CREATE TABLE users_to_items('
-                            'id INTEGER PRIMARY KEY, '
+                            'item_id INTEGER PRIMARY KEY, '
                             'user_id INTEGER, '
-                            'item_id INTEGER, '
                             'FOREIGN KEY(user_id) REFERENCES users(id), '
                             'FOREIGN KEY(item_id) REFERENCES items(id)'
                             ')')
@@ -43,8 +44,6 @@ class DB:
                             'FOREIGN KEY(item_id) REFERENCES items(id)'
                             ')')
 
-        self._test_data()
-
     def insert_user(self, user_id):
         req = f'INSERT INTO users (id) VALUES(\'{user_id}\')'
         self._execute(req)
@@ -53,7 +52,12 @@ class DB:
         req = f'UPDATE items SET sold = 1, last_check = CURRENT_TIMESTAMP WHERE id = {item_id}'
         self._execute(req)
 
+    def user_exist(self, id):
+        return len(self.cursor.execute(f'SELECT * FROM users WHERE users.id = {id}').fetchall()) != 0
+
     def insert_item(self, user_id, vk_id, caption, price):
+        if not self.user_exist(user_id):
+            self.insert_user(user_id)
         req = f'INSERT INTO items (id, caption, last_price) VALUES({vk_id}, \'{caption}\', {price})'
         self._execute(req)
         self._insert_user_to_item(user_id, vk_id)
@@ -64,25 +68,12 @@ class DB:
 
     def insert_event(self, item_id, percent, sale_price, full_price):
         ins_req = f'INSERT INTO events (item_id, percent, sale_price, full_price) VALUES({item_id}, ' \
-              f'{percent}, {sale_price}, {full_price})'
+                  f'{percent}, {sale_price}, {full_price})'
         self._execute(ins_req)
         upd_req = (f'UPDATE items SET last_price = {sale_price}, last_check = CURRENT_TIMESTAMP, '
                    f'last_update = CURRENT_TIMESTAMP WHERE id = {item_id}')
         self._execute(upd_req)
 
-    def _test_data(self):
-        self.insert_user(345345)
-        self.insert_item(345345, 1212745, 'AirPatrol Nordic V2', 92)
-        self.insert_event(1212745, 54, 92, 199)
-        self.insert_event(1212745, 56, 68, 199)
-        self.insert_event(1212745, 58, 80, 199)
-        self.insert_user(5674)
-        self.insert_item(5674, 1212340, 'Ortofon 2M-78 MM', 46)
-        self.insert_event(1212340, 69, 46, 149)
-        self.insert_event(1212340, 72, 40, 149)
-        self.insert_item(5674, 1216730, 'Sold item', 46)
-        self.insert_event(1216730, 69, 46, 149)
-        self.insert_event(1216730, 72, 40, 149)
     def _execute(self, request):
         print(request)
         self.cursor.execute(request)
@@ -99,3 +90,6 @@ class DB:
     def item_checked(self, item_id):
         req = f'UPDATE items SET last_check = CURRENT_TIMESTAMP WHERE id = {item_id}'
         self._execute(req)
+
+    def get_users_per_item(self, item_id):
+        return self.cursor.execute(f'SELECT * FROM users_to_items WHERE users_to_items.item_id = {item_id}').fetchall()
