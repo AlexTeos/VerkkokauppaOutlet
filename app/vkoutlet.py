@@ -29,7 +29,7 @@ class myClass:
 
     def __init__(self):
         self.setup_logger()
-        logger = logging.getLogger("vk")
+        logger = logging.getLogger('vk')
 
         try:
             config_file = Path('/ext/vk.ini')
@@ -53,7 +53,7 @@ class myClass:
                 else:
                     logger.warning('Config file is incorrect:' + config_file.name)
         except Exception as e:
-            logger.critical("Unhandled exception occurred: " + str(e))
+            logger.critical('Unhandled exception occurred: ' + str(e))
             raise
 
 

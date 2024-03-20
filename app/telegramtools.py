@@ -8,6 +8,9 @@ from telegram.ext import ContextTypes, Application, MessageHandler, filters
 
 from scrapetools import ParsingError
 
+DB_UPDATE_INTERVAL = 2 * 60 * 60
+TG_UPDATE_INTERVAL = 1 * 60 * 60
+
 
 class TelegramTools:
     FILE_SIZE_LIMIT = 48 * 1024 * 1024
@@ -20,7 +23,7 @@ class TelegramTools:
         application = Application.builder().token(bot_token).build()
         job_queue = application.job_queue
 
-        self.upd_job = job_queue.run_repeating(self.callback_minute, interval=10)
+        self.upd_job = job_queue.run_repeating(self.callback_minute, interval=TG_UPDATE_INTERVAL)
 
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.newItem))
 
@@ -36,6 +39,7 @@ class TelegramTools:
             sold, price, _, _, caption = self.st.get_item_data(item_id)
         except ParsingError:
             await context.bot.send_message(chat_id=self.admin_id, text='Failed to add item! Please try again!')
+            return
 
         if not sold:
             self.db.insert_item(update.message.from_user.id, update.message.text, caption, price)
@@ -48,15 +52,19 @@ class TelegramTools:
             await update.message.reply_text('Item is sold!')
 
     async def callback_minute(self, context: ContextTypes.DEFAULT_TYPE):
-        for item_id, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset=10):
+        for item_id, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset=DB_UPDATE_INTERVAL):
             try:
                 sold, current_price, percent, full_price, caption = self.st.get_item_data(item_id)
             except ParsingError:
                 continue
             if sold:
                 self.db.mark_as_sold(item_id)
+                _, caption, last_price, _, _, _ = self.db.get_item(item_id)
                 for _, user_id in self.db.get_users_per_item(item_id):
-                    await context.bot.send_message(chat_id=user_id, text=f'Item {item_id} is sold!')
+                    message = (
+                        f'{caption} is sold! The last price was {last_price}€'
+                    )
+                    await context.bot.send_message(chat_id=user_id, text=message, parse_mode=ParseMode.HTML)
             else:
                 if current_price != last_price:
                     self.db.insert_event(item_id, percent, current_price, full_price)
@@ -73,10 +81,10 @@ class TelegramTools:
                     self.db.item_checked(item_id)
 
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.logger.error(msg="Exception while handling an update:", exc_info=context.error)
+        self.logger.error(msg='Exception while handling an update:', exc_info=context.error)
 
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
-        tb_string = "".join(tb_list)
+        tb_string = ''.join(tb_list)
 
         update_str = update.to_dict() if isinstance(update, Update) else str(update)
         message = (

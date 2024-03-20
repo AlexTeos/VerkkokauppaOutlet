@@ -5,9 +5,9 @@ from pathlib import Path
 class DB:
     def __init__(self, logger):
         self.logger = logger
-        db_file = Path('vk.sqlite')
+        db_file = Path('/ext/vk.sqlite')
         db_exist = db_file.exists()
-        self.connection = sqlite3.connect('vk.sqlite')
+        self.connection = sqlite3.connect('/ext/vk.sqlite')
         self.cursor = self.connection.cursor()
         if not db_exist:
             self._init_db()
@@ -75,7 +75,7 @@ class DB:
         self._execute(upd_req)
 
     def _execute(self, request):
-        print(request)
+        self.logger.debug(f'Execute {request}')
         self.cursor.execute(request)
         self.connection.commit()
 
@@ -93,3 +93,6 @@ class DB:
 
     def get_users_per_item(self, item_id):
         return self.cursor.execute(f'SELECT * FROM users_to_items WHERE users_to_items.item_id = {item_id}').fetchall()
+
+    def get_item(self, item_id):
+        return self.cursor.execute(f'SELECT * FROM items WHERE items.id = {item_id}').fetchall()[0]
