@@ -1,4 +1,15 @@
 FROM python:3
+RUN apt-get update
+
+ # Install chromium
+RUN apt-get install -y gconf-service libasound2 libatk1.0-0 libcairo2 libcups2 libfontconfig1 libgdk-pixbuf2.0-0 libgtk-3-0 libnspr4 libpango-1.0-0 libxss1 fonts-liberation libappindicator1 libnss3 lsb-release xdg-utils
+RUN wget http://deb.debian.org/debian/pool/main/c/chromium/chromium_120.0.6099.224-1%7edeb11u1_armhf.deb
+RUN dpkg -i chromium_120.0.6099.224-1~deb11u1_armhf.deb; apt-get -fy install
+
+ # Download and install chromedriver
+RUN wget https://github.com/electron/electron/releases/download/v29.1.5/chromedriver-v29.1.5-linux-armv7l.zip
+RUN unzip chromedriver-v29.1.5-linux-armv7l.zip chromedriver
+RUN chmod +x chromedriver && mv chromedriver /usr/local/bin/ && chown root:root /usr/local/bin/chromedriver && chmod 0755 /usr/local/bin/chromedriver && rm chromedriver-v29.1.5-linux-armv7l.zip
 
 WORKDIR /app
 

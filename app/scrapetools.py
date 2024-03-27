@@ -11,7 +11,11 @@ class ParsingError(Exception):
 class ScrapeTools:
     def __init__(self, logger):
         self.logger = logger
-        self.driver = webdriver.Chrome()
+        opts = webdriver.ChromeOptions()
+        opts.add_argument('--headless')
+        opts.add_argument('--no-sandbox');
+        opts.add_argument('--disable-dev-shm-usage');
+        self.driver = webdriver.Chrome(chrome_options=opts)
 
     def _get_price(self, soup, tag):
         prices = soup.find_all('data', {'data-price': tag})
