@@ -7,6 +7,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, Application, MessageHandler, filters
 
 from scrapetools import ParsingError
+from db import UniqueError
 
 DB_UPDATE_INTERVAL = 2 * 60 * 60
 TG_UPDATE_INTERVAL = 1 * 60 * 60
@@ -42,7 +43,11 @@ class TelegramTools:
             return
 
         if not sold:
-            self.db.insert_item(update.message.from_user.id, update.message.text, caption, price)
+            try:
+                self.db.insert_item(update.message.from_user.id, update.message.text, caption, price)
+            except UniqueError as err:
+                await update.message.reply_text('You are already subscribed to this item!')
+                return
             message = (
                 f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
                 f' was added to your watch list!\nThe current price is {price}€'

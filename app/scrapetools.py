@@ -1,6 +1,7 @@
 from selenium import webdriver
 import math
 from bs4 import BeautifulSoup
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 class ParsingError(Exception):
@@ -15,7 +16,7 @@ class ScrapeTools:
         opts.add_argument('--headless')
         opts.add_argument('--no-sandbox');
         opts.add_argument('--disable-dev-shm-usage');
-        self.driver = webdriver.Chrome(chrome_options=opts)
+        self.driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=opts)
 
     def _get_price(self, soup, tag):
         prices = soup.find_all('data', {'data-price': tag})

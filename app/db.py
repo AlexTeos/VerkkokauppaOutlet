@@ -2,6 +2,10 @@ import sqlite3
 from pathlib import Path
 
 
+class UniqueError(Exception):
+    pass
+
+
 class DB:
     def __init__(self, logger):
         self.logger = logger
@@ -28,8 +32,9 @@ class DB:
                             ')')
 
         self.cursor.execute('CREATE TABLE users_to_items('
-                            'item_id INTEGER PRIMARY KEY, '
+                            'item_id INTEGER, '
                             'user_id INTEGER, '
+                            'PRIMARY KEY (item_id, user_id), '
                             'FOREIGN KEY(user_id) REFERENCES users(id), '
                             'FOREIGN KEY(item_id) REFERENCES items(id)'
                             ')')
@@ -59,12 +64,21 @@ class DB:
         if not self.user_exist(user_id):
             self.insert_user(user_id)
         req = f'INSERT INTO items (id, caption, last_price) VALUES({vk_id}, \'{caption}\', {price})'
-        self._execute(req)
+        try:
+            self._execute(req)
+        except sqlite3.IntegrityError as err:
+            if 'UNIQUE' not in str(err):
+                raise
         self._insert_user_to_item(user_id, vk_id)
 
     def _insert_user_to_item(self, user_id, vk_id):
         req = f'INSERT INTO users_to_items (user_id, item_id) VALUES({user_id}, {vk_id})'
-        self._execute(req)
+        try:
+            self._execute(req)
+        except sqlite3.IntegrityError as err:
+            if 'UNIQUE' not in str(err):
+                raise
+            raise UniqueError(f'User {user_id} already subscribed to {vk_id}')
 
     def insert_event(self, item_id, percent, sale_price, full_price):
         ins_req = f'INSERT INTO events (item_id, percent, sale_price, full_price) VALUES({item_id}, ' \
