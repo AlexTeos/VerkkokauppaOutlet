@@ -69,9 +69,9 @@ class DB:
         except sqlite3.IntegrityError as err:
             if 'UNIQUE' not in str(err):
                 raise
-        self._insert_user_to_item(user_id, vk_id)
+        self.insert_user_to_item(user_id, vk_id)
 
-    def _insert_user_to_item(self, user_id, vk_id):
+    def insert_user_to_item(self, user_id, vk_id):
         req = f'INSERT INTO users_to_items (user_id, item_id) VALUES({user_id}, {vk_id})'
         try:
             self._execute(req)
@@ -110,3 +110,11 @@ class DB:
 
     def get_item(self, item_id):
         return self.cursor.execute(f'SELECT * FROM items WHERE items.id = {item_id}').fetchall()[0]
+
+    def unsubscribe(self, user_id, vk_id):
+        req = f'DELETE FROM users_to_items WHERE users_to_items.user_id = {user_id} AND item_id = {vk_id}'
+        self._execute(req)
+
+    def get_events(self, vk_id):
+        req = f'SELECT * FROM events WHERE events.item_id = {vk_id}'
+        return self.cursor.execute(req)

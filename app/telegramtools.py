@@ -2,9 +2,9 @@ import html
 import json
 import traceback
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import ContextTypes, Application, MessageHandler, filters
+from telegram.ext import ContextTypes, Application, MessageHandler, filters, CallbackQueryHandler
 
 from scrapetools import ParsingError
 from db import UniqueError
@@ -26,13 +26,13 @@ class TelegramTools:
 
         self.upd_job = job_queue.run_repeating(self.callback_minute, interval=TG_UPDATE_INTERVAL)
 
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.newItem))
-
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.new_item_handler))
+        application.add_handler(CallbackQueryHandler(self.markup_handler))
         application.add_error_handler(self.error_handler)
 
         application.run_polling()
 
-    async def newItem(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def new_item_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         item_id = update.message.text
         sold = None
         price = None
@@ -66,10 +66,8 @@ class TelegramTools:
                 self.db.mark_as_sold(item_id)
                 _, caption, last_price, _, _, _ = self.db.get_item(item_id)
                 for _, user_id in self.db.get_users_per_item(item_id):
-                    message = (
-                        f'{caption} is sold! The last price was {last_price}€'
-                    )
-                    await context.bot.send_message(chat_id=user_id, text=message, parse_mode=ParseMode.HTML)
+                    await context.bot.send_message(chat_id=user_id,
+                                                   text=f'{caption} is sold! The last price was {last_price}€')
             else:
                 if current_price != last_price:
                     self.db.insert_event(item_id, percent, current_price, full_price)
@@ -81,7 +79,16 @@ class TelegramTools:
                             f'After: {current_price}€\n'
                             f'Sale: {percent}%'
                         )
-                        await context.bot.send_message(chat_id=user_id, text=message, parse_mode=ParseMode.HTML)
+                        keyboard = [
+                            [
+                                InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id}'),
+                                InlineKeyboardButton('Item History', callback_data=f'history;{item_id}'),
+                            ]
+                        ]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+
+                        await context.bot.send_message(chat_id=user_id, text=message, parse_mode=ParseMode.HTML,
+                                                       reply_markup=reply_markup)
                 else:
                     self.db.item_checked(item_id)
 
@@ -104,3 +111,51 @@ class TelegramTools:
         await context.bot.send_message(
             chat_id=self.admin_id, text=message, parse_mode=ParseMode.HTML
         )
+
+    async def markup_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        user_id = query.from_user.id
+        await query.answer()
+
+        query_data = query.data.split(";")
+        command = query_data[0]
+        item_id = query_data[1]
+
+        _, caption, _, _, _, _ = self.db.get_item(item_id)
+
+        if command == 'subscribe':
+            try:
+                self.db.insert_user_to_item(user_id, item_id)
+            except UniqueError as err:
+                pass
+            await context.bot.send_message(chat_id=user_id,
+                                           text=f'You subscribed to <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
+                                           parse_mode=ParseMode.HTML)
+            command = 'main'
+            
+        if command == 'unsubscribe':
+            self.db.unsubscribe(user_id, item_id)
+            await context.bot.send_message(chat_id=user_id,
+                                           text=f'You unsubscribed from <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
+                                           parse_mode=ParseMode.HTML)
+            keyboard = [
+                [InlineKeyboardButton('Subscribe', callback_data=f'subscribe;{item_id}'), ],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+
+        if command == 'main':
+            keyboard = [
+                [
+                    InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id}'),
+                    InlineKeyboardButton('Item History', callback_data=f'history;{item_id}'),
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+
+        if command == 'history':
+            history = f'History for the <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>:\n'
+            for _, _, ts, percent, price, _ in self.db.get_events(item_id):
+                history += f'[{ts.split()[0]}]: {percent}% {price}€\n'
+            await context.bot.send_message(chat_id=user_id, text=history, parse_mode=ParseMode.HTML)
