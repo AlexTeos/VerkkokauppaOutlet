@@ -25,6 +25,7 @@ class DB:
         self.cursor.execute('CREATE TABLE items('
                             'id INTEGER PRIMARY KEY, '
                             'caption, '
+                            'full_price INTEGER, '
                             'last_price INTEGER, '
                             'last_check TIMESTAMP DEFAULT CURRENT_TIMESTAMP, '
                             'last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP, '
@@ -44,8 +45,7 @@ class DB:
                             'item_id INTEGER, '
                             'ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP, '
                             'percent INTEGER, '
-                            'sale_price INTEGER, '
-                            'full_price INTEGER, '
+                            'price INTEGER, '
                             'FOREIGN KEY(item_id) REFERENCES items(id)'
                             ')')
 
@@ -60,10 +60,10 @@ class DB:
     def user_exist(self, id):
         return len(self.cursor.execute(f'SELECT * FROM users WHERE users.id = {id}').fetchall()) != 0
 
-    def insert_item(self, user_id, vk_id, caption, price):
+    def insert_item(self, user_id, vk_id, caption, full_price, price):
         if not self.user_exist(user_id):
             self.insert_user(user_id)
-        req = f'INSERT INTO items (id, caption, last_price) VALUES({vk_id}, \'{caption}\', {price})'
+        req = f'INSERT INTO items (id, caption, full_price, last_price) VALUES({vk_id}, \'{caption}\', {full_price}, {price})'
         try:
             self._execute(req)
         except sqlite3.IntegrityError as err:
@@ -80,11 +80,11 @@ class DB:
                 raise
             raise UniqueError(f'User {user_id} already subscribed to {vk_id}')
 
-    def insert_event(self, item_id, percent, sale_price, full_price):
-        ins_req = f'INSERT INTO events (item_id, percent, sale_price, full_price) VALUES({item_id}, ' \
-                  f'{percent}, {sale_price}, {full_price})'
+    def insert_event(self, item_id, percent, price):
+        ins_req = f'INSERT INTO events (item_id, percent, price) VALUES({item_id}, ' \
+                  f'{percent}, {price})'
         self._execute(ins_req)
-        upd_req = (f'UPDATE items SET last_price = {sale_price}, last_check = CURRENT_TIMESTAMP, '
+        upd_req = (f'UPDATE items SET last_price = {price}, last_check = CURRENT_TIMESTAMP, '
                    f'last_update = CURRENT_TIMESTAMP WHERE id = {item_id}')
         self._execute(upd_req)
 

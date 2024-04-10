@@ -37,40 +37,50 @@ class TelegramTools:
         sold = None
         price = None
         try:
-            sold, price, _, _, caption = self.st.get_item_data(item_id)
+            sold, price, percent, full_price, caption = self.st.get_item_data(item_id)
         except ParsingError:
             await context.bot.send_message(chat_id=self.admin_id, text='Failed to add item! Please try again!')
             return
 
         if not sold:
             try:
-                self.db.insert_item(update.message.from_user.id, update.message.text, caption, price)
+                self.db.insert_item(update.message.from_user.id, update.message.text, caption, full_price, price)
             except UniqueError as err:
                 await update.message.reply_text('You are already subscribed to this item!')
                 return
             message = (
                 f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
-                f' was added to your watch list!\nThe current price is {price}€'
+                f' was added to your watch list!\n'
+                f'Full price: {full_price}€\n'
+                f'Current price: {price}€\n'
+                f'Current sale: {percent}%'
             )
-            await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
+            keyboard = [
+                [
+                    InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id}'),
+                    InlineKeyboardButton('Item History', callback_data=f'history;{item_id}'),
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text=message, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text('Item is sold!')
 
     async def callback_minute(self, context: ContextTypes.DEFAULT_TYPE):
-        for item_id, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset=DB_UPDATE_INTERVAL):
+        for item_id, _, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset=DB_UPDATE_INTERVAL):
             try:
                 sold, current_price, percent, full_price, caption = self.st.get_item_data(item_id)
             except ParsingError:
                 continue
             if sold:
                 self.db.mark_as_sold(item_id)
-                _, caption, last_price, _, _, _ = self.db.get_item(item_id)
+                _, _, _, last_price, _, _, _ = self.db.get_item(item_id)
                 for _, user_id in self.db.get_users_per_item(item_id):
                     await context.bot.send_message(chat_id=user_id,
                                                    text=f'{caption} is sold! The last price was {last_price}€')
             else:
                 if current_price != last_price:
-                    self.db.insert_event(item_id, percent, current_price, full_price)
+                    self.db.insert_event(item_id, percent, current_price)
                     for _, user_id in self.db.get_users_per_item(item_id):
                         message = (
                             f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
@@ -121,7 +131,7 @@ class TelegramTools:
         command = query_data[0]
         item_id = query_data[1]
 
-        _, caption, _, _, _, _ = self.db.get_item(item_id)
+        _, caption, full_price, _, last_check, _, _ = self.db.get_item(item_id)
 
         if command == 'subscribe':
             try:
@@ -132,7 +142,7 @@ class TelegramTools:
                                            text=f'You subscribed to <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
                                            parse_mode=ParseMode.HTML)
             command = 'main'
-            
+
         if command == 'unsubscribe':
             self.db.unsubscribe(user_id, item_id)
             await context.bot.send_message(chat_id=user_id,
@@ -155,7 +165,12 @@ class TelegramTools:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
 
         if command == 'history':
-            history = f'History for the <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>:\n'
-            for _, _, ts, percent, price, _ in self.db.get_events(item_id):
+            history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> ({full_price}€) history:\n\n'
+            events_count = 0
+            for _, _, ts, percent, price in self.db.get_events(item_id):
+                events_count += 1
                 history += f'[{ts.split()[0]}]: {percent}% {price}€\n'
+            if not events_count:
+                history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> ({full_price}€) doesn\'t have any history yet!\n'
+            history += f'\nLast check: [{last_check}]'
             await context.bot.send_message(chat_id=user_id, text=history, parse_mode=ParseMode.HTML)
