@@ -55,7 +55,7 @@ class TelegramTools:
                 await update.message.reply_text('You are already subscribed to this item!')
                 return
             message = (
-                f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
+                f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
                 f' was added to your watch list!\n'
                 f'Full price: {full_price}€\n'
                 f'Current price: {price}€\n'
@@ -89,7 +89,7 @@ class TelegramTools:
                     self.db.insert_event(item_id, percent, current_price)
                     for _, user_id in self.db.get_users_per_item(item_id):
                         message = (
-                            f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
+                            f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
                             f' price changed!\n'
                             f'Before: {last_price}€\n'
                             f'After: {current_price}€\n'
@@ -145,14 +145,14 @@ class TelegramTools:
             except UniqueError as err:
                 pass
             await context.bot.send_message(chat_id=user_id,
-                                           text=f'You subscribed to <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
+                                           text=f'You subscribed to <b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
                                            parse_mode=ParseMode.HTML)
             command = 'main'
 
         if command == 'unsubscribe':
             self.db.unsubscribe(user_id, item_id)
             await context.bot.send_message(chat_id=user_id,
-                                           text=f'You unsubscribed from <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
+                                           text=f'You unsubscribed from <b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
                                            parse_mode=ParseMode.HTML)
             keyboard = [
                 [InlineKeyboardButton('Subscribe', callback_data=f'subscribe;{item_id}'), ],
@@ -171,14 +171,14 @@ class TelegramTools:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
 
         if command == 'history':
-            history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> history:\n\n'
+            history = f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> history:\n\n'
             events_count = 0
             for _, _, ts, percent, price in self.db.get_events(item_id):
                 events_count += 1
                 history += f'[{ts.split()[0]}]: {percent}% {price}€\n'
             if not events_count:
-                history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> doesn\'t have any history yet!\n'
-            history += f'\nLast check: [{last_check}]'
+                history = f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> doesn\'t have any history yet!\n'
+            history += f'\nLast check: {last_check}'
             await context.bot.send_message(chat_id=user_id, text=history, parse_mode=ParseMode.HTML)
 
     async def search_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -188,7 +188,7 @@ class TelegramTools:
         for item_id, caption, full_price, last_price, _, _, _ in self.db.get_user_items(update.message.from_user.id,
                                                                                         search_request):
             items_count += 1
-            items_list += f'<s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+            items_list += f'<b>[#{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
         if not items_count:
             items_list = f'No item was found for "{search_request}"!\n'
         await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
@@ -198,7 +198,7 @@ class TelegramTools:
         items_count = 0
         for item_id, caption, full_price, last_price, _, _, _ in self.db.get_user_items(update.message.from_user.id):
             items_count += 1
-            items_list += f'<s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+            items_list += f'<b>[#{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
         if not items_count:
             items_list = f'You don\'t have any items yet!\n'
         await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
