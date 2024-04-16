@@ -93,8 +93,17 @@ class DB:
         self.cursor.execute(request)
         self.connection.commit()
 
-    def get_items(self):
-        return self.cursor.execute('SELECT * FROM items').fetchall()
+    def get_items(self, caption=None):
+        request = 'SELECT * FROM items'
+        if caption:
+            request += f' WHERE items.caption LIKE \'%{caption}%\''
+        return self.cursor.execute(request).fetchall()
+
+    def get_user_items(self, user_id, caption=None):
+        request = f'SELECT items.* FROM users_to_items INNER JOIN items ON users_to_items.item_id = items.id WHERE items.sold = 0 AND user_id = {user_id}'
+        if caption:
+            request += f' AND items.caption LIKE \'%{caption}%\''
+        return self.cursor.execute(request).fetchall()
 
     def get_unsold_items(self, time_offset):
         days_offset = time_offset / 86400.0

@@ -2,9 +2,9 @@ import html
 import json
 import traceback
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.constants import ParseMode
-from telegram.ext import ContextTypes, Application, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import ContextTypes, Application, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 
 from scrapetools import ParsingError
 from db import UniqueError
@@ -21,15 +21,20 @@ class TelegramTools:
         self.st = st
         self.logger = logger
         self.admin_id = admin_id
-        application = Application.builder().token(bot_token).build()
+
+        async def post_init(app: Application) -> None:
+            await app.bot.set_my_commands(
+                [BotCommand("search", "search among your items"), BotCommand("list", "list of all your items")])
+
+        application = Application.builder().token(bot_token).post_init(post_init).build()
         job_queue = application.job_queue
 
         self.upd_job = job_queue.run_repeating(self.callback_minute, interval=TG_UPDATE_INTERVAL)
 
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.new_item_handler))
         application.add_handler(CallbackQueryHandler(self.markup_handler))
+        application.add_handler(CommandHandler("search", self.search_handler))
         application.add_error_handler(self.error_handler)
-
         application.run_polling()
 
     async def new_item_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -165,12 +170,24 @@ class TelegramTools:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
 
         if command == 'history':
-            history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> ({full_price}€) history:\n\n'
+            history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> history:\n\n'
             events_count = 0
             for _, _, ts, percent, price in self.db.get_events(item_id):
                 events_count += 1
                 history += f'[{ts.split()[0]}]: {percent}% {price}€\n'
             if not events_count:
-                history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> ({full_price}€) doesn\'t have any history yet!\n'
+                history = f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> doesn\'t have any history yet!\n'
             history += f'\nLast check: [{last_check}]'
             await context.bot.send_message(chat_id=user_id, text=history, parse_mode=ParseMode.HTML)
+
+    async def search_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        search_request = update.message.text[len('/search '):]
+        items_list = f'Search for "{search_request}":\n'
+        items_count = 0
+        for item_id, caption, full_price, last_price, _, _, _ in self.db.get_user_items(update.message.from_user.id,
+                                                                                        search_request):
+            items_count += 1
+            items_list += f'<s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+        if not items_count:
+            items_list = f'No item was found for "{search_request}"!\n'
+        await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
