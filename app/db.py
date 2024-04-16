@@ -35,6 +35,7 @@ class DB:
         self.cursor.execute('CREATE TABLE users_to_items('
                             'item_id INTEGER, '
                             'user_id INTEGER, '
+                            'favorite BOOLEAN DEFAULT FALSE, '
                             'PRIMARY KEY (item_id, user_id), '
                             'FOREIGN KEY(user_id) REFERENCES users(id), '
                             'FOREIGN KEY(item_id) REFERENCES items(id)'
@@ -80,6 +81,10 @@ class DB:
                 raise
             raise UniqueError(f'User {user_id} already subscribed to {vk_id}')
 
+    def set_favorite(self, user_id, vk_id, value):
+        req = f'UPDATE users_to_items SET favorite = {value} WHERE user_id = {user_id} AND item_id = {vk_id}'
+        self._execute(req)
+
     def insert_event(self, item_id, percent, price):
         ins_req = f'INSERT INTO events (item_id, percent, price) VALUES({item_id}, ' \
                   f'{percent}, {price})'
@@ -99,10 +104,12 @@ class DB:
             request += f' WHERE items.caption LIKE \'%{caption}%\''
         return self.cursor.execute(request).fetchall()
 
-    def get_user_items(self, user_id, caption=None):
-        request = f'SELECT items.* FROM users_to_items INNER JOIN items ON users_to_items.item_id = items.id WHERE items.sold = 0 AND user_id = {user_id}'
+    def get_user_items(self, user_id, caption=None, favorites=False):
+        request = f'SELECT items.*, users_to_items.favorite FROM users_to_items INNER JOIN items ON users_to_items.item_id = items.id WHERE items.sold = 0 AND user_id = {user_id}'
         if caption:
             request += f' AND items.caption LIKE \'%{caption}%\''
+        if favorites:
+            request += f' AND users_to_items.favorite = 1'
         return self.cursor.execute(request).fetchall()
 
     def get_unsold_items(self, time_offset):
@@ -115,7 +122,8 @@ class DB:
         self._execute(req)
 
     def get_users_per_item(self, item_id):
-        return self.cursor.execute(f'SELECT * FROM users_to_items WHERE users_to_items.item_id = {item_id}').fetchall()
+        return self.cursor.execute(
+            f'SELECT users_to_items.user_id, users_to_items.favorite FROM users_to_items WHERE users_to_items.item_id = {item_id}').fetchall()
 
     def get_item(self, item_id):
         return self.cursor.execute(f'SELECT * FROM items WHERE items.id = {item_id}').fetchall()[0]

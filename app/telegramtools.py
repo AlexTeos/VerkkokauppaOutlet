@@ -24,7 +24,8 @@ class TelegramTools:
 
         async def post_init(app: Application) -> None:
             await app.bot.set_my_commands(
-                [BotCommand("search", "search among your items"), BotCommand("list", "list of all your items")])
+                [BotCommand("search", "search among your items"), BotCommand("list", "list of all your items"),
+                 BotCommand("favorites", "list of your favorite items")])
 
         application = Application.builder().token(bot_token).post_init(post_init).build()
         job_queue = application.job_queue
@@ -34,7 +35,8 @@ class TelegramTools:
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.new_item_handler))
         application.add_handler(CallbackQueryHandler(self.markup_handler))
         application.add_handler(CommandHandler("search", self.search_handler))
-        application.add_handler(CommandHandler("list", self.search_handler))
+        application.add_handler(CommandHandler("list", self.list_handler))
+        application.add_handler(CommandHandler("favorites", self.favorite_handler))
         application.add_error_handler(self.error_handler)
         application.run_polling()
 
@@ -63,8 +65,9 @@ class TelegramTools:
             )
             keyboard = [
                 [
-                    InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id}'),
-                    InlineKeyboardButton('Item History', callback_data=f'history;{item_id}'),
+                    InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id};0;0'),
+                    InlineKeyboardButton('Add to favorite', callback_data=f'favorite;{item_id};0;0'),
+                    InlineKeyboardButton('Item History', callback_data=f'history;{item_id};0;0'),
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -81,15 +84,22 @@ class TelegramTools:
             if sold:
                 self.db.mark_as_sold(item_id)
                 _, _, _, last_price, _, _, _ = self.db.get_item(item_id)
-                for _, user_id in self.db.get_users_per_item(item_id):
+                for user_id, favorite in self.db.get_users_per_item(item_id):
+                    keyboard = [
+                        [
+                            InlineKeyboardButton('Item History', callback_data=f'history;{item_id};{sold};{favorite}'),
+                        ]
+                    ]
+                    message = f'<b>[{"*" if favorite else "#"}{item_id}]</b> {caption} is sold! The last price was {last_price}€'
                     await context.bot.send_message(chat_id=user_id,
-                                                   text=f'{caption} is sold! The last price was {last_price}€')
+                                                   text=message, parse_mode=ParseMode.HTML,
+                                                   reply_markup=reply_markup)
             else:
                 if current_price != last_price:
                     self.db.insert_event(item_id, percent, current_price)
-                    for _, user_id in self.db.get_users_per_item(item_id):
+                    for user_id, favorite in self.db.get_users_per_item(item_id):
                         message = (
-                            f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
+                            f'<b>[{"*" if favorite else "#"}{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
                             f' price changed!\n'
                             f'Before: {last_price}€\n'
                             f'After: {current_price}€\n'
@@ -97,8 +107,12 @@ class TelegramTools:
                         )
                         keyboard = [
                             [
-                                InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id}'),
-                                InlineKeyboardButton('Item History', callback_data=f'history;{item_id}'),
+                                InlineKeyboardButton('Unsubscribe',
+                                                     callback_data=f'unsubscribe;{item_id};{sold};{favorite}'),
+                                InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} to favorite',
+                                                     callback_data=f'{"un" if favorite else ""}favorite;{item_id};{sold};{favorite}'),
+                                InlineKeyboardButton('Item History',
+                                                     callback_data=f'history;{item_id};{sold};{favorite}'),
                             ]
                         ]
                         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -136,6 +150,8 @@ class TelegramTools:
         query_data = query.data.split(";")
         command = query_data[0]
         item_id = query_data[1]
+        sold = query_data[2]
+        favorite = query_data[3]
 
         _, caption, full_price, _, last_check, _, _ = self.db.get_item(item_id)
 
@@ -147,6 +163,23 @@ class TelegramTools:
             await context.bot.send_message(chat_id=user_id,
                                            text=f'You subscribed to <b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
                                            parse_mode=ParseMode.HTML)
+            favorite = 0
+            command = 'main'
+
+        if command == 'favorite':
+            self.db.set_favorite(user_id, item_id, True)
+            await context.bot.send_message(chat_id=user_id,
+                                           text=f'You added <b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> to favorites',
+                                           parse_mode=ParseMode.HTML)
+            favorite = 1
+            command = 'main'
+
+        if command == 'unfavorite':
+            self.db.set_favorite(user_id, item_id, False)
+            await context.bot.send_message(chat_id=user_id,
+                                           text=f'You removed <b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> from favorites',
+                                           parse_mode=ParseMode.HTML)
+            favorite = 0
             command = 'main'
 
         if command == 'unsubscribe':
@@ -155,7 +188,7 @@ class TelegramTools:
                                            text=f'You unsubscribed from <b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>',
                                            parse_mode=ParseMode.HTML)
             keyboard = [
-                [InlineKeyboardButton('Subscribe', callback_data=f'subscribe;{item_id}'), ],
+                [InlineKeyboardButton('Subscribe', callback_data=f'subscribe;{item_id};{sold};{favorite}'), ],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_reply_markup(reply_markup=reply_markup)
@@ -163,8 +196,10 @@ class TelegramTools:
         if command == 'main':
             keyboard = [
                 [
-                    InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id}'),
-                    InlineKeyboardButton('Item History', callback_data=f'history;{item_id}'),
+                    InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id};{sold};{favorite}'),
+                    InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} to favorite',
+                                         callback_data=f'{"un" if favorite else ""}favorite;{item_id};{sold};{favorite}'),
+                    InlineKeyboardButton('Item History', callback_data=f'history;{item_id};{sold};{favorite}'),
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -185,20 +220,33 @@ class TelegramTools:
         search_request = update.message.text[len('/search '):]
         items_list = f'Search for "{search_request}":\n'
         items_count = 0
-        for item_id, caption, full_price, last_price, _, _, _ in self.db.get_user_items(update.message.from_user.id,
-                                                                                        search_request):
+        for item_id, caption, full_price, last_price, _, _, _, favorite in self.db.get_user_items(
+                update.message.from_user.id,
+                search_request):
             items_count += 1
-            items_list += f'<b>[#{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+            items_list += f'<b>[{"*" if favorite else "#"}{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
         if not items_count:
             items_list = f'No item was found for "{search_request}"!\n'
         await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
 
-    async def search_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def list_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         items_list = f'List of all your unsold items:\n'
         items_count = 0
-        for item_id, caption, full_price, last_price, _, _, _ in self.db.get_user_items(update.message.from_user.id):
+        for item_id, caption, full_price, last_price, _, _, _, favorite in self.db.get_user_items(
+                update.message.from_user.id):
+            items_count += 1
+            items_list += f'<b>[{"*" if favorite else "#"}{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+        if not items_count:
+            items_list = f'You don\'t have any items yet!\n'
+        await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
+
+    async def favorite_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        items_list = f'List of your favorite unsold items:\n'
+        items_count = 0
+        for item_id, caption, full_price, last_price, _, _, _, _ in self.db.get_user_items(update.message.from_user.id,
+                                                                                           favorites=True):
             items_count += 1
             items_list += f'<b>[#{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
         if not items_count:
-            items_list = f'You don\'t have any items yet!\n'
+            items_list = f'You don\'t have any favorite items yet!\n'
         await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
