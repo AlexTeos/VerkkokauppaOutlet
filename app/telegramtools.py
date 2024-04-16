@@ -34,6 +34,7 @@ class TelegramTools:
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.new_item_handler))
         application.add_handler(CallbackQueryHandler(self.markup_handler))
         application.add_handler(CommandHandler("search", self.search_handler))
+        application.add_handler(CommandHandler("list", self.search_handler))
         application.add_error_handler(self.error_handler)
         application.run_polling()
 
@@ -190,4 +191,14 @@ class TelegramTools:
             items_list += f'<s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
         if not items_count:
             items_list = f'No item was found for "{search_request}"!\n'
+        await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
+
+    async def search_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        items_list = f'List of all your unsold items:\n'
+        items_count = 0
+        for item_id, caption, full_price, last_price, _, _, _ in self.db.get_user_items(update.message.from_user.id):
+            items_count += 1
+            items_list += f'<s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+        if not items_count:
+            items_list = f'You don\'t have any items yet!\n'
         await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
