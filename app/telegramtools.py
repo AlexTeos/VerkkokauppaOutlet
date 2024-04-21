@@ -83,13 +83,14 @@ class TelegramTools:
                 continue
             if sold:
                 self.db.mark_as_sold(item_id)
-                _, _, _, last_price, _, _, _ = self.db.get_item(item_id)
+                _, caption, _, last_price, _, _, _ = self.db.get_item(item_id)
                 for user_id, favorite in self.db.get_users_per_item(item_id):
                     keyboard = [
                         [
                             InlineKeyboardButton('Item History', callback_data=f'history;{item_id};{sold};{favorite}'),
                         ]
                     ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
                     message = f'<b>[{"*" if favorite else "#"}{item_id}]</b> {caption} is sold! The last price was {last_price}€'
                     await context.bot.send_message(chat_id=user_id,
                                                    text=message, parse_mode=ParseMode.HTML,
