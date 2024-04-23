@@ -1,6 +1,7 @@
 import html
 import json
 import traceback
+import re
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.constants import ParseMode
@@ -40,10 +41,19 @@ class TelegramTools:
         application.add_error_handler(self.error_handler)
         application.run_polling()
 
+    @staticmethod
+    def retrieve_item_id(text):
+        item_id = re.search(r'\d\d\d\d\d\d\d', text)
+        if item_id:
+            return item_id.group(0)
+        return None
+
     async def new_item_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        item_id = update.message.text
-        sold = None
-        price = None
+        item_id = self.retrieve_item_id(update.message.text)
+        if not item_id:
+            await update.message.reply_text('Can\'t find the item!')
+            return
+
         try:
             sold, price, percent, full_price, caption = self.st.get_item_data(item_id)
         except ParsingError:
@@ -52,7 +62,7 @@ class TelegramTools:
 
         if not sold:
             try:
-                self.db.insert_item(update.message.from_user.id, update.message.text, caption, full_price, price)
+                self.db.insert_item(update.message.from_user.id, item_id, caption, full_price, price)
             except UniqueError as err:
                 await update.message.reply_text('You are already subscribed to this item!')
                 return
