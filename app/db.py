@@ -135,3 +135,8 @@ class DB:
     def get_events(self, vk_id):
         req = f'SELECT * FROM events WHERE events.item_id = {vk_id}'
         return self.cursor.execute(req)
+
+    def is_favorite(self, user_id, item_id):
+        return self.cursor.execute(
+            f'SELECT users_to_items.favorite FROM users_to_items WHERE users_to_items.item_id = {item_id} AND users_to_items.user_id = {user_id}').fetchone()[
+            0]

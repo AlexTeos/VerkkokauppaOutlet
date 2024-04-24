@@ -64,7 +64,26 @@ class TelegramTools:
             try:
                 self.db.insert_item(update.message.from_user.id, item_id, caption, full_price, price)
             except UniqueError as err:
-                await update.message.reply_text('You are already subscribed to this item!')
+                favorite = self.db.is_favorite(update.message.from_user.id, item_id)
+                message = (
+                    f'You are already subscribed to this item!\n'
+                    f'<b>[{"*" if favorite else "#"}{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+                    f'Full price: {full_price}€\n'
+                    f'Current price: {price}€\n'
+                    f'Current sale: {percent}%'
+                )
+                keyboard = [
+                    [
+                        InlineKeyboardButton('Unsubscribe',
+                                             callback_data=f'unsubscribe;{item_id};{sold};{favorite}'),
+                        InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} favorite',
+                                             callback_data=f'{"un" if favorite else ""}favorite;{item_id};{sold};{favorite}'),
+                        InlineKeyboardButton('Item History', callback_data=f'history;{item_id};{sold};{favorite}'),
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(text=message, reply_markup=reply_markup,
+                                                parse_mode=ParseMode.HTML)
                 return
             message = (
                 f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
@@ -120,7 +139,7 @@ class TelegramTools:
                             [
                                 InlineKeyboardButton('Unsubscribe',
                                                      callback_data=f'unsubscribe;{item_id};{sold};{favorite}'),
-                                InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} to favorite',
+                                InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} favorite',
                                                      callback_data=f'{"un" if favorite else ""}favorite;{item_id};{sold};{favorite}'),
                                 InlineKeyboardButton('Item History',
                                                      callback_data=f'history;{item_id};{sold};{favorite}'),
@@ -208,7 +227,7 @@ class TelegramTools:
             keyboard = [
                 [
                     InlineKeyboardButton('Unsubscribe', callback_data=f'unsubscribe;{item_id};{sold};{favorite}'),
-                    InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} to favorite',
+                    InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} favorite',
                                          callback_data=f'{"un" if favorite else ""}favorite;{item_id};{sold};{favorite}'),
                     InlineKeyboardButton('Item History', callback_data=f'history;{item_id};{sold};{favorite}'),
                 ]

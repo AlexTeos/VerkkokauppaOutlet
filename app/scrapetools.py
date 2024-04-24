@@ -45,9 +45,9 @@ class ScrapeTools:
         html = self.driver.page_source
         soup = BeautifulSoup(html, 'html.parser')
 
-        sold = soup.find_all('div', string='Tämä tuote ei ole enää saatavilla.')
+        sold = int(bool(soup.find_all('div', string='Tämä tuote ei ole enää saatavilla.')))
         if sold:
-            return True, None, None, None, None
+            return sold, None, None, None, None
 
         current_price = self._get_price(soup, 'current')
         full_price = self._get_price(soup, 'previous')
