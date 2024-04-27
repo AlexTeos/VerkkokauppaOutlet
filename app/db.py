@@ -61,16 +61,20 @@ class DB:
     def user_exist(self, id):
         return len(self.cursor.execute(f'SELECT * FROM users WHERE users.id = {id}').fetchall()) != 0
 
-    def insert_item(self, user_id, vk_id, caption, full_price, price):
+    def add_new_item(self, user_id, vk_id, caption, full_price, price, percent):
         if not self.user_exist(user_id):
             self.insert_user(user_id)
+        self.insert_item(user_id, vk_id, caption, full_price, price)
+        self.insert_user_to_item(user_id, vk_id)
+        self.insert_event(vk_id, percent, price)
+
+    def insert_item(self, user_id, vk_id, caption, full_price, price):
         req = f'INSERT INTO items (id, caption, full_price, last_price) VALUES({vk_id}, \'{caption}\', {full_price}, {price})'
         try:
             self._execute(req)
         except sqlite3.IntegrityError as err:
             if 'UNIQUE' not in str(err):
                 raise
-        self.insert_user_to_item(user_id, vk_id)
 
     def insert_user_to_item(self, user_id, vk_id):
         req = f'INSERT INTO users_to_items (user_id, item_id) VALUES({user_id}, {vk_id})'

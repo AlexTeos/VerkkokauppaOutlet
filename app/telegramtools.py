@@ -62,7 +62,7 @@ class TelegramTools:
 
         if not sold:
             try:
-                self.db.insert_item(update.message.from_user.id, item_id, caption, full_price, price)
+                self.db.add_new_item(update.message.from_user.id, item_id, caption, full_price, price, percent)
             except UniqueError as err:
                 favorite = self.db.is_favorite(update.message.from_user.id, item_id)
                 message = (
