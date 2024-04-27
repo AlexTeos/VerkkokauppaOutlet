@@ -159,18 +159,16 @@ class TelegramTools:
         tb_string = ''.join(tb_list)
 
         update_str = update.to_dict() if isinstance(update, Update) else str(update)
-        message = (
-            f'An exception was raised while handling an update\n'
-            f'<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}'
-            '</pre>\n\n'
-            f'<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n'
-            f'<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n'
-            f'<pre>{html.escape(tb_string)}</pre>'
-        )
+        message_list = [
+            f'An exception was raised while handling an update\n',
+            f'<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}',
+            '</pre>\n\n',
+            f'<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n',
+            f'<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n',
+            f'<pre>{html.escape(tb_string)}</pre>',
+        ]
 
-        await context.bot.send_message(
-            chat_id=self.admin_id, text=message, parse_mode=ParseMode.HTML
-        )
+        await self.send_list(context, self.admin_id, message_list)
 
     async def markup_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -248,35 +246,50 @@ class TelegramTools:
 
     async def search_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         search_request = update.message.text[len('/search '):]
-        items_list = f'Search for "{search_request}":\n'
-        items_count = 0
+        items_list = [f'Search for "{search_request}":']
         for item_id, caption, full_price, last_price, _, _, _, favorite in self.db.get_user_items(
                 update.message.from_user.id,
                 search_request):
-            items_count += 1
-            items_list += f'<b>[{"*" if favorite else "#"}{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
-        if not items_count:
-            items_list = f'No item was found for "{search_request}"!\n'
-        await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
+            items_list.append(
+                f'<b>[{"*" if favorite else "#"}{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>')
+        if len(items_list) > 1:
+            await self.send_list(context, update.message.from_user.id, items_list)
+            return
+
+        await update.message.reply_text(text=f'No item was found for "{search_request}"!\n', parse_mode=ParseMode.HTML)
 
     async def list_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        items_list = f'List of all your unsold items:\n'
-        items_count = 0
+        items_list = [f'List of all your unsold items:']
         for item_id, caption, full_price, last_price, _, _, _, favorite in self.db.get_user_items(
                 update.message.from_user.id):
-            items_count += 1
-            items_list += f'<b>[{"*" if favorite else "#"}{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
-        if not items_count:
-            items_list = f'You don\'t have any items yet!\n'
-        await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
+            items_list.append(
+                f'<b>[{"*" if favorite else "#"}{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>')
+        if len(items_list) > 1:
+            await self.send_list(context, update.message.from_user.id, items_list)
+            return
+
+        update.message.reply_text(text=f'You don\'t have any items yet!\n')
 
     async def favorite_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        items_list = f'List of your favorite unsold items:\n'
-        items_count = 0
+        items_list = [f'List of your favorite unsold items:']
         for item_id, caption, full_price, last_price, _, _, _, _ in self.db.get_user_items(update.message.from_user.id,
                                                                                            favorites=True):
-            items_count += 1
-            items_list += f'<b>[#{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
-        if not items_count:
-            items_list = f'You don\'t have any favorite items yet!\n'
-        await update.message.reply_text(text=items_list, parse_mode=ParseMode.HTML)
+            items_list.append(
+                f'<b>[#{item_id}]</b> <s>{full_price}€</s> {last_price}€ <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>')
+        if len(items_list) > 1:
+            await self.send_list(context, update.message.from_user.id, items_list)
+            return
+
+        update.message.reply_text(text=f'You don\'t have any favorite items yet!\n')
+
+    @staticmethod
+    async def send_list(context, chat_id, lines):
+        message = ''
+        for line in lines:
+            if len(line) >= 4000:
+                continue
+            if len(message) + len(line) >= 4000:
+                await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=ParseMode.HTML)
+                message = ''
+            message += line + '\n'
+        await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=ParseMode.HTML)
