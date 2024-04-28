@@ -235,13 +235,14 @@ class TelegramTools:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
 
         if command == 'history':
-            history = f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> history:\n\n'
+            item_caption = caption if sold else f'<a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
+            history = f'<b>[#{item_id}]</b> {item_caption} <s>{full_price}€</s> history:\n\n'
             events_count = 0
             for _, _, ts, percent, price in self.db.get_events(item_id):
                 events_count += 1
                 history += f'[{ts.split()[0]}]: {percent}% {price}€\n'
             if not events_count:
-                history = f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a> <s>{full_price}€</s> doesn\'t have any history yet!\n'
+                history = f'<b>[#{item_id}]</b> {item_caption} <s>{full_price}€</s> doesn\'t have any history!\n'
             history += f'\nLast check: {last_check}'
             await context.bot.send_message(chat_id=user_id, text=history, parse_mode=ParseMode.HTML)
 
@@ -269,7 +270,7 @@ class TelegramTools:
             await self.send_list(context, update.message.from_user.id, items_list)
             return
 
-        await update.message.reply_text(text=f'You don\'t have any items yet!\n')
+        await update.message.reply_text(text=f'You don\'t have any items!\n')
 
     async def favorite_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         items_list = [f'List of your favorite unsold items:']
@@ -281,7 +282,7 @@ class TelegramTools:
             await self.send_list(context, update.message.from_user.id, items_list)
             return
 
-        await update.message.reply_text(text=f'You don\'t have any favorite items yet!\n')
+        await update.message.reply_text(text=f'You don\'t have any favorite items!\n')
 
     async def manual_update_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if str(update.message.from_user.id) != self.admin_id:
