@@ -117,7 +117,7 @@ class DB:
         return self.cursor.execute(request).fetchall()
 
     def get_unsold_items(self, time_offset):
-        days_offset = time_offset / 86400.0
+        days_offset = time_offset / 86400.0 if time_offset > 0 else 0
         return self.cursor.execute(f'SELECT * FROM items WHERE items.sold = 0 AND '
                                    f'JULIANDAY(CURRENT_TIMESTAMP) - JULIANDAY(items.last_check) > {days_offset}').fetchall()
 

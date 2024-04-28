@@ -11,7 +11,7 @@ from scrapetools import ParsingError
 from db import UniqueError
 
 DB_UPDATE_INTERVAL = 2 * 60 * 60
-TG_UPDATE_INTERVAL = 1 * 60 * 60
+TG_UPDATE_INTERVAL = 10 * 60
 
 
 class TelegramTools:
@@ -38,6 +38,7 @@ class TelegramTools:
         application.add_handler(CommandHandler("search", self.search_handler))
         application.add_handler(CommandHandler("list", self.list_handler))
         application.add_handler(CommandHandler("favorites", self.favorite_handler))
+        application.add_handler(CommandHandler("update", self.manual_update_handler))
         application.add_error_handler(self.error_handler)
         application.run_polling()
 
@@ -104,8 +105,8 @@ class TelegramTools:
         else:
             await update.message.reply_text('Item is sold!')
 
-    async def callback_minute(self, context: ContextTypes.DEFAULT_TYPE):
-        for item_id, _, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset=DB_UPDATE_INTERVAL):
+    async def callback_minute(self, context: ContextTypes.DEFAULT_TYPE, time_offset=DB_UPDATE_INTERVAL):
+        for item_id, _, _, last_price, _, _, _ in self.db.get_unsold_items(time_offset):
             try:
                 sold, current_price, percent, full_price, caption = self.st.get_item_data(item_id)
             except ParsingError:
@@ -268,7 +269,7 @@ class TelegramTools:
             await self.send_list(context, update.message.from_user.id, items_list)
             return
 
-        update.message.reply_text(text=f'You don\'t have any items yet!\n')
+        await update.message.reply_text(text=f'You don\'t have any items yet!\n')
 
     async def favorite_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         items_list = [f'List of your favorite unsold items:']
@@ -280,7 +281,15 @@ class TelegramTools:
             await self.send_list(context, update.message.from_user.id, items_list)
             return
 
-        update.message.reply_text(text=f'You don\'t have any favorite items yet!\n')
+        await update.message.reply_text(text=f'You don\'t have any favorite items yet!\n')
+
+    async def manual_update_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if str(update.message.from_user.id) != self.admin_id:
+            await update.message.reply_text(text=f'You aren\'t allowed to use this command!')
+            return
+        await update.message.reply_text(text=f'Starting manual update!')
+        await self.callback_minute(context, 0)
+        await update.message.reply_text(text=f'Manual update has finished!')
 
     @staticmethod
     async def send_list(context, chat_id, lines):
