@@ -2,11 +2,36 @@ from selenium import webdriver
 import math
 from bs4 import BeautifulSoup
 from webdriver_manager.chrome import ChromeDriverManager
+from time import sleep
+
+
+class AccessDeniedError(Exception):
+    def __init__(self, message):
+        self.message = message
 
 
 class ParsingError(Exception):
     def __init__(self, message):
         self.message = message
+
+
+def retry_decorator(retry_attempts=3):
+    def decorator(func):
+        def wrapped_func(*args, **kwargs):
+            for i in range(retry_attempts):
+                try:
+                    result = func(*args, **kwargs)
+                except AccessDeniedError:
+                    raise
+                except Exception as err:
+                    exception = err
+                else:
+                    return result
+            raise exception
+
+        return wrapped_func
+
+    return decorator
 
 
 class ScrapeTools:
@@ -40,10 +65,15 @@ class ScrapeTools:
             raise ParsingError('Failed to extract percent')
         return percent
 
+    @retry_decorator()
     def get_item_data(self, id):
         self.driver.get(f'https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{id}')
+        sleep(1)
         html = self.driver.page_source
         soup = BeautifulSoup(html, 'html.parser')
+
+        if bool(soup.find('title', string='Access denied | www.verkkokauppa.com used Cloudflare to restrict access')):
+            raise AccessDeniedError()
 
         sold = int(bool(soup.find_all('div', string='Tämä tuote ei ole enää saatavilla.')))
         if sold:

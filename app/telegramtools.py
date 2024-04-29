@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotComm
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, Application, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 
-from scrapetools import ParsingError
+from scrapetools import ParsingError, AccessDeniedError
 from db import UniqueError
 
 DB_UPDATE_INTERVAL = 2 * 60 * 60
@@ -57,7 +57,8 @@ class TelegramTools:
 
         try:
             sold, price, percent, full_price, caption = self.st.get_item_data(item_id)
-        except ParsingError:
+        except (ParsingError, AccessDeniedError) as err:
+            self.logger.warning(msg=f'Error occurred: {err}')
             await context.bot.send_message(chat_id=self.admin_id, text='Failed to add item! Please try again!')
             return
 
@@ -111,6 +112,9 @@ class TelegramTools:
                 sold, current_price, percent, full_price, caption = self.st.get_item_data(item_id)
             except ParsingError:
                 continue
+            except AccessDeniedError as err:
+                self.logger.warning(msg=f'Error occurred: {err}')
+                return
             if sold:
                 self.db.mark_as_sold(item_id)
                 _, caption, _, last_price, _, _, _ = self.db.get_item(item_id)
@@ -288,7 +292,7 @@ class TelegramTools:
         if str(update.message.from_user.id) != self.admin_id:
             await update.message.reply_text(text=f'You aren\'t allowed to use this command!')
             return
-        await update.message.reply_text(text=f'Starting manual update!')
+        await update.message.reply_text(text=f'Starting manual update...')
         await self.callback_minute(context, 0)
         await update.message.reply_text(text=f'Manual update has finished!')
 
