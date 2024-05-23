@@ -56,6 +56,32 @@ class TelegramTools:
             return
 
         try:
+            _, caption, full_price, last_price, _, _, sold = self.db.get_item(item_id)
+            favorite = self.db.is_favorite(update.message.from_user.id, item_id)
+            message = (
+                f'You are already subscribed to this item!\n'
+                f'<b>[{"*" if favorite else "#"}{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
+                f'Full price: {full_price}€\n'
+                f'Current price: {last_price}€\n'
+                f'Current sale: {round(100 - last_price / full_price * 100)}%'
+            )
+            keyboard = [
+                [
+                    InlineKeyboardButton('Unsubscribe',
+                                         callback_data=f'unsubscribe;{item_id};{sold};{favorite}'),
+                    InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} favorite',
+                                         callback_data=f'{"un" if favorite else ""}favorite;{item_id};{sold};{favorite}'),
+                    InlineKeyboardButton('Item History', callback_data=f'history;{item_id};{sold};{favorite}'),
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text=message, reply_markup=reply_markup,
+                                            parse_mode=ParseMode.HTML)
+            return
+        except IndexError:
+            pass
+
+        try:
             sold, price, percent, full_price, caption = self.st.get_item_data(item_id)
         except (ParsingError, AccessDeniedError) as err:
             self.logger.warning(msg=f'Error occurred: {err}')
@@ -63,30 +89,7 @@ class TelegramTools:
             return
 
         if not sold:
-            try:
-                self.db.add_new_item(update.message.from_user.id, item_id, caption, full_price, price, percent)
-            except UniqueError as err:
-                favorite = self.db.is_favorite(update.message.from_user.id, item_id)
-                message = (
-                    f'You are already subscribed to this item!\n'
-                    f'<b>[{"*" if favorite else "#"}{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>\n'
-                    f'Full price: {full_price}€\n'
-                    f'Current price: {price}€\n'
-                    f'Current sale: {percent}%'
-                )
-                keyboard = [
-                    [
-                        InlineKeyboardButton('Unsubscribe',
-                                             callback_data=f'unsubscribe;{item_id};{sold};{favorite}'),
-                        InlineKeyboardButton(f'{"Remove from" if favorite else "Add to"} favorite',
-                                             callback_data=f'{"un" if favorite else ""}favorite;{item_id};{sold};{favorite}'),
-                        InlineKeyboardButton('Item History', callback_data=f'history;{item_id};{sold};{favorite}'),
-                    ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(text=message, reply_markup=reply_markup,
-                                                parse_mode=ParseMode.HTML)
-                return
+            self.db.add_new_item(update.message.from_user.id, item_id, caption, full_price, price, percent)
             message = (
                 f'<b>[#{item_id}]</b> <a href="https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{item_id}">{caption}</a>'
                 f' was added to your watch list!\n'
