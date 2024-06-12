@@ -56,15 +56,6 @@ class ScrapeTools:
     def _get_caption(self, soup):
         return soup.find('h1', {'class': True}).string
 
-    def _get_percent(self, soup):
-        percents = soup.find_all('span', {'data-discount-percentage': True})
-        try:
-            percent = percents[0]['data-discount-percentage']
-        except IndexError:
-            self.logger.error('Failed to extract percent')
-            raise ParsingError('Failed to extract percent')
-        return percent
-
     @retry_decorator()
     def get_item_data(self, id):
         self.driver.get(f'https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{id}')
@@ -81,6 +72,6 @@ class ScrapeTools:
 
         current_price = self._get_price(soup, 'current')
         full_price = self._get_price(soup, 'previous')
-        percent = self._get_percent(soup)
+        percent = round(100 - current_price / full_price * 100)
         caption = self._get_caption(soup)
         return sold, current_price, percent, full_price, caption
