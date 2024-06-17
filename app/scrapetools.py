@@ -3,6 +3,7 @@ import math
 from bs4 import BeautifulSoup
 from webdriver_manager.chrome import ChromeDriverManager
 from time import sleep
+from functools import wraps
 
 
 class AccessDeniedError(Exception):
@@ -17,6 +18,7 @@ class ParsingError(Exception):
 
 def retry_decorator(retry_attempts=3):
     def decorator(func):
+        @wraps(func)
         def wrapped_func(*args, **kwargs):
             for i in range(retry_attempts):
                 try:
@@ -34,14 +36,45 @@ def retry_decorator(retry_attempts=3):
     return decorator
 
 
+class chromeDriver():
+    def __init__(self):
+        self.opts = webdriver.ChromeOptions()
+        self.opts.add_argument('--headless')
+        self.opts.add_argument('--no-sandbox');
+        self.opts.add_argument('--disable-dev-shm-usage');
+        self._start()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._stop()
+
+    def _start(self):
+        self._driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=self.opts)
+
+    def _stop(self):
+        self._driver.quit()
+
+    def restart(self):
+        self._stop()
+        self._start()
+
+    def get(self, page):
+        try:
+            self._driver.get(page)
+        except KeyError:
+            self._driver_reset()
+            raise
+        sleep(1)
+        return self.page_source
+
+    @property
+    def page_source(self):
+        return self._driver.page_source
+
+
 class ScrapeTools:
     def __init__(self, logger):
         self.logger = logger
-        opts = webdriver.ChromeOptions()
-        opts.add_argument('--headless')
-        opts.add_argument('--no-sandbox');
-        opts.add_argument('--disable-dev-shm-usage');
-        self.driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=opts)
+        self.driver = chromeDriver()
 
     def _get_price(self, soup, tag):
         prices = soup.find_all('data', {'data-price': tag})
@@ -53,14 +86,13 @@ class ScrapeTools:
         price = math.ceil(float(price))
         return price
 
-    def _get_caption(self, soup):
+    @staticmethod
+    def _get_caption(soup):
         return soup.find('h1', {'class': True}).string
 
     @retry_decorator()
     def get_item_data(self, id):
-        self.driver.get(f'https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{id}')
-        sleep(1)
-        html = self.driver.page_source
+        html = self.driver.get(f'https://www.verkkokauppa.com/fi/outlet/yksittaiskappaleet/{id}')
         soup = BeautifulSoup(html, 'html.parser')
 
         if bool(soup.find('title', string='Access denied | www.verkkokauppa.com used Cloudflare to restrict access')):
