@@ -31,6 +31,7 @@ class TelegramTools:
         application = Application.builder().token(bot_token).post_init(post_init).build()
         job_queue = application.job_queue
 
+        job_queue.run_once(self.callback_minute, when=0)
         self.upd_job = job_queue.run_repeating(self.callback_minute, interval=TG_UPDATE_INTERVAL)
 
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.new_item_handler))
